@@ -58,18 +58,6 @@ def initialization_db(name):
         )
         ''')
 
-        # Создание таблицы vocabulary
-        cursor.execute('''
-        CREATE TABLE IF NOT EXISTS `vocabulary` (
-            `id` INTEGER PRIMARY KEY AUTOINCREMENT,
-            `level_id` INTEGER NOT NULL,
-            `english_word` TEXT NOT NULL,
-            `russian_word` TEXT NOT NULL,
-            `is_the_word_known` BOOL DEFAULT False,
-            FOREIGN KEY (`level_id`) REFERENCES `levels` (`id`)
-        )
-        ''')
-
         # Создание таблицы practice
         cursor.execute('''
         CREATE TABLE IF NOT EXISTS practice (
@@ -81,6 +69,9 @@ def initialization_db(name):
             FOREIGN KEY (theory_id) REFERENCES theory(id)
         )
         ''')
+
+    connection.commit()
+    # connection.close()
 
 
 def prepare_file_for_db(file_path):
@@ -139,20 +130,6 @@ def fill_db(name):
             VALUES (?, ?, ?, ?, ?)
             ''', formatted_rows)
 
-        # Заполнение таблицы vocabulary
-        cursor.execute('SELECT COUNT(*) FROM `vocabulary`')
-        if cursor.fetchone()[0] == 0:
-            vocabulary = [*prepare_file_for_vocabulary(Levels.A1, 'a1_words'),
-                         *prepare_file_for_vocabulary(Levels.A2, 'a2_words'),
-                         *prepare_file_for_vocabulary(Levels.B1, 'b1_words'),
-                         *prepare_file_for_vocabulary(Levels.B2, 'b2_words'),
-                         *prepare_file_for_vocabulary(Levels.C1, 'c1_words')]
-            # Данные для vocabulary
-            cursor.executemany('''
-                INSERT INTO vocabulary (level_id, english_word, russian_word, is_the_word_known)
-                VALUES (?, ?, ?, False)
-                ''', vocabulary)
-
         # Заполнение таблицы practice
         cursor.execute('SELECT COUNT(*) FROM practice')
         if cursor.fetchone()[0] == 0:
@@ -165,6 +142,7 @@ def fill_db(name):
             ''', formatted_rows)
 
         connection.commit()
+        # connection.close()
 
 
 def initialization_chat(name, user_id):
@@ -181,6 +159,77 @@ def initialization_chat(name, user_id):
         """)
 
 
+def initialization_vocabulary(name, user_id):
+    """Создает таблицу со словарём по айди пользователя"""
+    with sqlite3.connect(name) as connection:
+        cursor = connection.cursor()
+        table_name = f"vocabulary_{user_id}"
+        # Создание таблицы vocabulary
+        cursor.execute(f"""
+        CREATE TABLE IF NOT EXISTS {table_name} (
+            `id` INTEGER PRIMARY KEY AUTOINCREMENT,
+            `user_id` INTEGER NOT NULL,
+            `level_id` INTEGER NOT NULL,
+            `english_word` TEXT NOT NULL,
+            `russian_word` TEXT NOT NULL,
+            `is_the_word_known` BOOL DEFAULT False,
+            FOREIGN KEY (`level_id`) REFERENCES `levels` (`id`),
+            FOREIGN KEY (`user_id`) REFERENCES `users` (`user_id`)
+        )
+        """)
+
+
+def filling_vocabulary(name, user_id):
+    # Заполнение таблицы vocabulary
+    with sqlite3.connect(name) as db:
+        table_name = f"vocabulary_{user_id}"
+        cursor = db.cursor()
+        cursor.execute(f"SELECT COUNT(*) FROM {table_name}")
+        if not cursor.fetchone()[0]:
+            vocabulary = [*prepare_file_for_vocabulary(Levels.A1, 'a1_words'),
+                          *prepare_file_for_vocabulary(Levels.A2, 'a2_words'),
+                          *prepare_file_for_vocabulary(Levels.B1, 'b1_words'),
+                          *prepare_file_for_vocabulary(Levels.B2, 'b2_words'),
+                          *prepare_file_for_vocabulary(Levels.C1, 'c1_words')]
+            # Данные для vocabulary
+            cursor.executemany(f"""
+                    INSERT INTO {table_name} (`user_id`, `level_id`, `english_word`, `russian_word`, `is_the_word_known`)
+                    VALUES ({user_id}, ?, ?, ?, False)
+                    """, vocabulary)
+
+
+def update_word_status(name, russian_word, user_id):
+    """Обновляет статус слова в словаре, помечая его как знакомое"""
+    with sqlite3.connect(name) as connection:
+        table_name = f"vocabulary_{user_id}"
+        cursor = connection.cursor()
+        cursor.execute(f"""
+                UPDATE {table_name}
+                SET `is_the_word_known` = ?
+                WHERE `russian_word` = ?
+                """, (True, russian_word,))
+        connection.commit()
+
+
+def get_list_of_unknown_words(name, level_id, user_id):
+    """
+    Получает список незнакомых слов для указанного уровня языка,
+    возвращает список незнакомых слов с их данными
+    """
+    with sqlite3.connect(name) as connect:
+        table_name = f"vocabulary_{user_id}"
+        cursor = connect.cursor()
+        cursor.execute(f"""
+            SELECT `english_word`, `russian_word`
+            FROM {table_name}
+            WHERE `level_id` = ? AND `is_the_word_known` = ? 
+            """, (level_id, False))
+        rows = cursor.fetchall()
+        list_of_words = [list(row) for row in rows]
+        return list_of_words
+
+
+# Функции для словаря закончились
 def write_or_replace_level_id(name, user_id, level_id):
     """Записывает или изменяет уровень языка пользователя"""
     with sqlite3.connect(name) as connection:
@@ -195,7 +244,6 @@ def write_or_replace_level_id(name, user_id, level_id):
 
 def get_level_id(name, user_id):
     """Получает по айди пользователя его айди уровня владения языком и возвращает его"""
-
     with sqlite3.connect(name) as connect:
         cursor = connect.cursor()
         cursor.execute("""
@@ -225,7 +273,7 @@ def get_level_name(name, level_id):
 
 
 def get_all_theory(name, level_id):
-    """Получает всю теорию по айди уровня владения языком и возвращает ее"""
+    """Получает всю теорию по айди уровня владения языком и возвращает её"""
     with sqlite3.connect(name) as connect:
         cursor = connect.cursor()
         cursor.execute("""
@@ -238,7 +286,7 @@ def get_all_theory(name, level_id):
 
 
 def get_theory_by_id(name, theory_id):
-    """Получает ОДНУ полную информацию о конретной теории по айди данной теории и возвращает ее"""
+    """Получает ОДНУ полную информацию о конкретной теории по айди данной теории и возвращает ее"""
     with sqlite3.connect(name) as connect:
         cursor = connect.cursor()
         cursor.execute("""
@@ -254,7 +302,7 @@ def get_practice_by_theory_id(name, theory_id):
     """
     Получает все практические задания по указанному айди теории
 
-    Возвращает писок всех практических заданий для данной теории
+    Возвращает список всех практических заданий для данной теории
     """
     with sqlite3.connect(name) as connect:
         cursor = connect.cursor()
@@ -349,33 +397,3 @@ def clear_table(name, user_id):
         DELETE FROM {table_name}
         """)
         db.commit()
-
-
-def get_list_of_unknown_words(name, level_id):
-    """
-    Получает список незнакомых слов для указанного уровня языка
-
-    Возвращает список незнакомых слов с их данными
-    """
-    with sqlite3.connect(name) as connect:
-        cursor = connect.cursor()
-        cursor.execute("""
-        SELECT * 
-        FROM vocabulary 
-        WHERE `level_id` = ? AND `is_the_word_known` = ? 
-        """, (level_id, False))
-        rows = cursor.fetchall()
-        list_of_words = [list(row) for row in rows]
-        return list_of_words
-
-
-def update_word_status(name, russian_word):
-    """Обновляет статус слова, помечая его как знакомое"""
-    with sqlite3.connect(name) as connection:
-        cursor = connection.cursor()
-        cursor.execute("""
-                UPDATE vocabulary
-                SET `is_the_word_known` = ?
-                WHERE `russian_word` = ?
-                """, (True, russian_word,))
-        connection.commit()

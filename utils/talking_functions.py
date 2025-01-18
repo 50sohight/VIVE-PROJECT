@@ -18,6 +18,7 @@ def talking_output(message, returned_main_menu):
     bot.register_next_step_handler(message, chat, returned_main_menu=returned_main_menu)
 
 
+# Нужно разбить на более мелкие методы
 def chat(message, returned_main_menu):
     # Данный блок "if" отправляет пользователю аналитику по чату
     if message.text.lower() == 'аналитика':
@@ -60,4 +61,4 @@ def chat(message, returned_main_menu):
 
         bot.send_message(message.chat.id, bot_text, reply_markup=markup)
 
-        bot.register_next_step_handler(message, chat, returned_main_menu=returned_main_menu)
+        bot.register_next_step_handler(message, chat, returned_main_menu=returned_main_menu)  # Ра

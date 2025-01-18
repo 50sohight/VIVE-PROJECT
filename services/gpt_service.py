@@ -1,11 +1,14 @@
 from openai import OpenAI
 from config import key
 
+
 client = OpenAI(
     api_key=key,
     base_url="https://api.proxyapi.ru/openai/v1"
 )
 
+
+# Нужно разбить на более мелкие методы
 def get_gpt_analysis(str_of_user_messages, user_level_name):
     """
     Запрашивает аналитику у chat-gpt
