@@ -17,6 +17,7 @@ def vocabulary_output(message, returned_main_menu):
     right_answer = task_word_set[1]
 
     answers = [i[1] for i in sample]
+    # Всё, что выше нужно вынести в отдельный метод
 
     markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
     button_a = types.KeyboardButton(answers[0])
